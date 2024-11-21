@@ -49,7 +49,7 @@ func ListDevices(c *gin.Context) {
 
 	// Query to fetch paginated items
 	var devices []Device
-	query := "SELECT id, name, age, class FROM devices LIMIT ? OFFSET ?"
+	query := "SELECT id, name, type FROM devices LIMIT ? OFFSET ?"
 	rows, err := db.Query(query, perPage, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error retrieving resources.", "error": err.Error()})
@@ -83,24 +83,40 @@ func ListDevices(c *gin.Context) {
 func AddDevice(c *gin.Context) {
 	var newDevice Device
 	if err := c.BindJSON(&newDevice); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error creating resource.", "error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error creating resource.",
+			"error":   err.Error(),
+		})
 		return
 	}
 
-	result, err := db.Exec("INSERT INTO devices (name, age, class) VALUES (?, ?, ?)", newDevice.Name, newDevice.Type)
+	result, err := db.Exec("INSERT INTO devices (name, type) VALUES (?, ?)", newDevice.Name, newDevice.Type)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error creating resource.", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error creating resource.",
+			"error":   err.Error(),
+		})
 		return
 	}
 
 	id, err := result.LastInsertId()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error creating resource.", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error creating resource.",
+			"error":   err.Error(),
+		})
 		return
 	}
 
 	newDevice.ID = int(id)
-	c.JSON(http.StatusCreated, gin.H{"success": true, "message": "Resource created successfully.", "data": newDevice})
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Resource created successfully.",
+		"data":    newDevice,
+	})
 }
 
 func EditDevice(c *gin.Context) {
@@ -116,7 +132,7 @@ func EditDevice(c *gin.Context) {
 		return
 	}
 
-	_, err = db.Exec("UPDATE devices SET name = ?, age = ?, class = ? WHERE id = ?", updatedDevice.Name, updatedDevice.Type, id)
+	_, err = db.Exec("UPDATE devices SET name = ?, type = ?, WHERE id = ?", updatedDevice.Name, updatedDevice.Type, id)
 	if err != nil { // Assuming 'err' holds the error from your update operation
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error updating resource.", "error": err.Error()})
 		return
@@ -146,8 +162,7 @@ func CreateTable() {
 	createTableSQL := `CREATE TABLE IF NOT EXISTS devices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        age INTEGER NOT NULL,
-        class TEXT NOT NULL
+        type TEXT NOT NULL
     );`
 
 	_, err := db.Exec(createTableSQL)

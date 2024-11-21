@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/dan-sapp-sandbox/Bastion_server/device"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "modernc.org/sqlite"
 )
@@ -23,6 +24,13 @@ func main() {
 
 	// Set up Gin
 	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:8081"}, // Add your front-end origin
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
 
 	// Routes
 	r.GET("/devices", device.ListDevices)
