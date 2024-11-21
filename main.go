@@ -4,32 +4,31 @@ import (
 	"database/sql"
 	"log"
 
-	"github.com/esafwan/gosqlite/user"
-
+	"github.com/dan-sapp-sandbox/Bastion_server/device"
 	"github.com/gin-gonic/gin"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
 	// Connect to SQLite Database
-	db, err := sql.Open("sqlite3", "./test.db")
+	db, err := sql.Open("sqlite", "./devices.db")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	// Setup user package and create table
-	user.Setup(db)
-	user.CreateTable()
+	// Setup device package and create table
+	device.Setup(db)
+	device.CreateTable()
 
 	// Set up Gin
 	r := gin.Default()
 
 	// Routes
-	r.GET("/users", user.ListUsers)
-	r.POST("/users", user.AddUser)
-	r.PUT("/users/:id", user.EditUser)
-	r.DELETE("/users/:id", user.DeleteUser)
+	r.GET("/devices", device.ListDevices)
+	r.POST("/devices", device.AddDevice)
+	r.PUT("/devices/:id", device.EditDevice)
+	r.DELETE("/devices/:id", device.DeleteDevice)
 
 	// Start server
 	r.Run() // listen and serve on 0.0.0.0:8080

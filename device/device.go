@@ -1,4 +1,4 @@
-package user
+package device
 
 import (
 	"database/sql"
@@ -9,11 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type User struct {
-	ID    int    `json:"id"`
-	Name  string `json:"name"`
-	Age   int    `json:"age"`
-	Class string `json:"class"`
+type Device struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 var db *sql.DB
@@ -22,27 +21,7 @@ func Setup(database *sql.DB) {
 	db = database
 }
 
-// func ListUsers(c *gin.Context) {
-// 	var users []User
-// 	rows, err := db.Query("SELECT id, name, age, class FROM users")
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-// 		return
-// 	}
-// 	defer rows.Close()
-
-// 	for rows.Next() {
-// 		var u User
-// 		if err := rows.Scan(&u.ID, &u.Name, &u.Age, &u.Class); err != nil {
-// 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-// 			return
-// 		}
-// 		users = append(users, u)
-// 	}
-// 	c.JSON(http.StatusOK, users)
-// }
-
-func ListUsers(c *gin.Context) {
+func ListDevices(c *gin.Context) {
 	// Parse query parameters for pagination
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "10"))
@@ -55,7 +34,7 @@ func ListUsers(c *gin.Context) {
 
 	// Query to count total items
 	var total int
-	countQuery := "SELECT COUNT(*) FROM users"
+	countQuery := "SELECT COUNT(*) FROM devices"
 	err := db.QueryRow(countQuery).Scan(&total)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error retrieving resources.", "error": err.Error()})
@@ -69,8 +48,8 @@ func ListUsers(c *gin.Context) {
 	}
 
 	// Query to fetch paginated items
-	var users []User
-	query := "SELECT id, name, age, class FROM users LIMIT ? OFFSET ?"
+	var devices []Device
+	query := "SELECT id, name, age, class FROM devices LIMIT ? OFFSET ?"
 	rows, err := db.Query(query, perPage, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error retrieving resources.", "error": err.Error()})
@@ -79,12 +58,12 @@ func ListUsers(c *gin.Context) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var u User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Age, &u.Class); err != nil {
+		var u Device
+		if err := rows.Scan(&u.ID, &u.Name, &u.Type); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error retrieving resources.", "error": err.Error()})
 			return
 		}
-		users = append(users, u)
+		devices = append(devices, u)
 	}
 
 	// Construct the response
@@ -92,7 +71,7 @@ func ListUsers(c *gin.Context) {
 		"success": true,
 		"message": "Resources retrieved successfully.",
 		"data": gin.H{
-			"items":       users,
+			"items":       devices,
 			"total":       total,
 			"perPage":     perPage,
 			"currentPage": page,
@@ -101,14 +80,14 @@ func ListUsers(c *gin.Context) {
 	})
 }
 
-func AddUser(c *gin.Context) {
-	var newUser User
-	if err := c.BindJSON(&newUser); err != nil {
+func AddDevice(c *gin.Context) {
+	var newDevice Device
+	if err := c.BindJSON(&newDevice); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error creating resource.", "error": err.Error()})
 		return
 	}
 
-	result, err := db.Exec("INSERT INTO users (name, age, class) VALUES (?, ?, ?)", newUser.Name, newUser.Age, newUser.Class)
+	result, err := db.Exec("INSERT INTO devices (name, age, class) VALUES (?, ?, ?)", newDevice.Name, newDevice.Type)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error creating resource.", "error": err.Error()})
 		return
@@ -120,40 +99,40 @@ func AddUser(c *gin.Context) {
 		return
 	}
 
-	newUser.ID = int(id)
-	c.JSON(http.StatusCreated, gin.H{"success": true, "message": "Resource created successfully.", "data": newUser})
+	newDevice.ID = int(id)
+	c.JSON(http.StatusCreated, gin.H{"success": true, "message": "Resource created successfully.", "data": newDevice})
 }
 
-func EditUser(c *gin.Context) {
+func EditDevice(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid user ID.", "error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid device ID.", "error": err.Error()})
 		return
 	}
 
-	var updatedUser User
-	if err := c.BindJSON(&updatedUser); err != nil {
+	var updatedDevice Device
+	if err := c.BindJSON(&updatedDevice); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error updating resource.", "error": err.Error()})
 		return
 	}
 
-	_, err = db.Exec("UPDATE users SET name = ?, age = ?, class = ? WHERE id = ?", updatedUser.Name, updatedUser.Age, updatedUser.Class, id)
+	_, err = db.Exec("UPDATE devices SET name = ?, age = ?, class = ? WHERE id = ?", updatedDevice.Name, updatedDevice.Type, id)
 	if err != nil { // Assuming 'err' holds the error from your update operation
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error updating resource.", "error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Resource updated successfully.", "data": updatedUser})
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Resource updated successfully.", "data": updatedDevice})
 }
 
-func DeleteUser(c *gin.Context) {
+func DeleteDevice(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid user ID.", "error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid device ID.", "error": err.Error()})
 		return
 	}
 
-	_, err = db.Exec("DELETE FROM users WHERE id = ?", id)
+	_, err = db.Exec("DELETE FROM devices WHERE id = ?", id)
 	if err != nil { // Assuming 'err' holds the error from your delete operation
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error deleting resource.", "error": err.Error()})
 		return
@@ -162,9 +141,9 @@ func DeleteUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Resource deleted successfully."})
 }
 
-// CreateTable creates the users table if it does not exist
+// CreateTable creates the devices table if it does not exist
 func CreateTable() {
-	createTableSQL := `CREATE TABLE IF NOT EXISTS users (
+	createTableSQL := `CREATE TABLE IF NOT EXISTS devices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         age INTEGER NOT NULL,
