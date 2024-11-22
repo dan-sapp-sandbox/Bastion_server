@@ -26,7 +26,7 @@ func main() {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:8081", "https://lights-iota.vercel.app/"}, // Add your front-end origin
+		AllowOrigins:     []string{"http://localhost:8081", "https://lights-iota.vercel.app"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
