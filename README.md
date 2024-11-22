@@ -1,4 +1,4 @@
-#Bastion Server
+# Bastion Server
 
 ## Getting started
 
