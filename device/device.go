@@ -175,4 +175,28 @@ func CreateTable() {
 	if err != nil {
 		log.Fatal("Failed to create table: ", err)
 	}
+
+	seedData()
+}
+
+func seedData() {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM devices").Scan(&count)
+	if err != nil {
+		log.Fatal("Failed to check device count: ", err)
+	}
+
+	if count == 0 {
+		insertSQL := `INSERT INTO devices (name, type, isOn) VALUES
+			('Living Room', 'Light', true),
+			('Bedroom', 'Fan', false),
+			('Front Door', 'Door', false),
+			('Kitchen', 'Light', true)`
+
+		_, err := db.Exec(insertSQL)
+		if err != nil {
+			log.Fatal("Failed to seed data: ", err)
+		}
+		log.Println("Database seeded with default devices.")
+	}
 }
