@@ -24,7 +24,7 @@ func Setup(database *sql.DB) {
 func ListDevices(c *gin.Context) {
 	// Parse query parameters for pagination
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "10"))
+	perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "100"))
 
 	if page < 1 {
 		page = 1
