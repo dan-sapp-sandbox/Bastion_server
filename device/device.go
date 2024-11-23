@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/dan-sapp-sandbox/Bastion_server/changeLog"
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,21 +34,6 @@ func ListDevices(c *gin.Context) {
 
 	offset := (page - 1) * perPage
 
-	// Query to count total items
-	var total int
-	countQuery := "SELECT COUNT(*) FROM devices"
-	err := db.QueryRow(countQuery).Scan(&total)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error retrieving resources.", "error": err.Error()})
-		return
-	}
-
-	// Adjust totalPages to ensure it always has a value
-	totalPages := total / perPage
-	if total%perPage != 0 {
-		totalPages++
-	}
-
 	// Initialize devices as an empty slice
 	devices := []Device{}
 
@@ -55,7 +41,11 @@ func ListDevices(c *gin.Context) {
 	query := "SELECT id, name, type, isOn FROM devices LIMIT ? OFFSET ?"
 	rows, err := db.Query(query, perPage, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error retrieving resources.", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error retrieving resources.",
+			"error":   err.Error(),
+		})
 		return
 	}
 	defer rows.Close()
@@ -63,7 +53,11 @@ func ListDevices(c *gin.Context) {
 	for rows.Next() {
 		var u Device
 		if err := rows.Scan(&u.ID, &u.Name, &u.Type, &u.IsOn); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error retrieving resources.", "error": err.Error()})
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "Error retrieving resources.",
+				"error":   err.Error(),
+			})
 			return
 		}
 		devices = append(devices, u)
@@ -73,14 +67,27 @@ func ListDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Resources retrieved successfully.",
-		"data": gin.H{
-			"items":       devices,
-			"total":       total,
-			"perPage":     perPage,
-			"currentPage": page,
-			"totalPages":  totalPages,
-		},
+		"data":    devices,
 	})
+}
+
+func fetchDevices() ([]Device, error) {
+	query := "SELECT id, name, type, isOn FROM devices"
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var devices []Device
+	for rows.Next() {
+		var device Device
+		if err := rows.Scan(&device.ID, &device.Name, &device.Type, &device.IsOn); err != nil {
+			return nil, err
+		}
+		devices = append(devices, device)
+	}
+	return devices, nil
 }
 
 func AddDevice(c *gin.Context) {
@@ -95,7 +102,6 @@ func AddDevice(c *gin.Context) {
 	}
 
 	result, err := db.Exec("INSERT INTO devices (name, type, isOn) VALUES (?, ?, ?)", newDevice.Name, newDevice.Type, newDevice.IsOn)
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -116,11 +122,27 @@ func AddDevice(c *gin.Context) {
 	}
 
 	newDevice.ID = int(id)
-	newDevice.IsOn = bool(false)
+
+	// Log the change
+	changeDescription := "Added device: " + newDevice.Name
+	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
+		log.Printf("Failed to log change: %v", err)
+	}
+
+	devices, err := fetchDevices()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error retrieving resources.",
+			"error":   err.Error(),
+		})
+		return
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Resource created successfully.",
-		"data":    newDevice,
+		"data":    devices,
 	})
 }
 
@@ -143,7 +165,27 @@ func EditDevice(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Resource updated successfully.", "data": updatedDevice})
+	// Log the change
+	changeDescription := "Edited device ID " + strconv.Itoa(id) + ": Updated name to '" + updatedDevice.Name + "'"
+	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
+		log.Printf("Failed to log change: %v", err)
+	}
+
+	devices, err := fetchDevices()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error retrieving resources.",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Resource updated successfully.",
+		"data":    devices,
+	})
 }
 
 func DeleteDevice(c *gin.Context) {
@@ -154,12 +196,32 @@ func DeleteDevice(c *gin.Context) {
 	}
 
 	_, err = db.Exec("DELETE FROM devices WHERE id = ?", id)
-	if err != nil { // Assuming 'err' holds the error from your delete operation
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error deleting resource.", "error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Resource deleted successfully."})
+	// Log the change
+	changeDescription := "Deleted device with ID " + strconv.Itoa(id)
+	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
+		log.Printf("Failed to log change: %v", err)
+	}
+
+	devices, err := fetchDevices()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error retrieving resources.",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"message": "Resource deleted successfully.",
+		"data":    devices,
+	})
 }
 
 // CreateTable creates the devices table if it does not exist
