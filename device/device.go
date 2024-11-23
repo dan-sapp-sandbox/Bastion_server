@@ -94,7 +94,8 @@ func AddDevice(c *gin.Context) {
 		return
 	}
 
-	result, err := db.Exec("INSERT INTO devices (name, type, isOn) VALUES (?, ?)", newDevice.Name, newDevice.Type, false)
+	result, err := db.Exec("INSERT INTO devices (name, type, isOn) VALUES (?, ?, ?)", newDevice.Name, newDevice.Type, newDevice.IsOn)
+
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
