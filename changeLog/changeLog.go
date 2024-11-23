@@ -33,7 +33,7 @@ func GetChangeLog(c *gin.Context) {
 
 	entries := []LogEntry{}
 
-	query := "SELECT id, change, timestamp FROM change_log LIMIT ? OFFSET ?"
+	query := "SELECT id, change, timestamp FROM change_log ORDER BY timestamp DESC LIMIT ? OFFSET ?"
 	rows, err := db.Query(query, perPage, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
