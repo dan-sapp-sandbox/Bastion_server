@@ -13,6 +13,7 @@ type Device struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
 	Type string `json:"type"`
+	IsOn bool   `json:"isOn"`
 }
 
 var db *sql.DB
@@ -47,9 +48,11 @@ func ListDevices(c *gin.Context) {
 		totalPages++
 	}
 
+	// Initialize devices as an empty slice
+	devices := []Device{}
+
 	// Query to fetch paginated items
-	var devices []Device
-	query := "SELECT id, name, type FROM devices LIMIT ? OFFSET ?"
+	query := "SELECT id, name, type, isOn FROM devices LIMIT ? OFFSET ?"
 	rows, err := db.Query(query, perPage, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error retrieving resources.", "error": err.Error()})
@@ -59,7 +62,7 @@ func ListDevices(c *gin.Context) {
 
 	for rows.Next() {
 		var u Device
-		if err := rows.Scan(&u.ID, &u.Name, &u.Type); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Type, &u.IsOn); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error retrieving resources.", "error": err.Error()})
 			return
 		}
@@ -91,7 +94,7 @@ func AddDevice(c *gin.Context) {
 		return
 	}
 
-	result, err := db.Exec("INSERT INTO devices (name, type) VALUES (?, ?)", newDevice.Name, newDevice.Type)
+	result, err := db.Exec("INSERT INTO devices (name, type, isOn) VALUES (?, ?)", newDevice.Name, newDevice.Type, false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -112,6 +115,7 @@ func AddDevice(c *gin.Context) {
 	}
 
 	newDevice.ID = int(id)
+	newDevice.IsOn = bool(false)
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Resource created successfully.",
@@ -132,7 +136,7 @@ func EditDevice(c *gin.Context) {
 		return
 	}
 
-	_, err = db.Exec("UPDATE devices SET name = ?, type = ?, WHERE id = ?", updatedDevice.Name, updatedDevice.Type, id)
+	_, err = db.Exec("UPDATE devices SET name = ?, type = ?, isOn = ?, WHERE id = ?", updatedDevice.Name, updatedDevice.Type, updatedDevice.IsOn, id)
 	if err != nil { // Assuming 'err' holds the error from your update operation
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error updating resource.", "error": err.Error()})
 		return
@@ -162,7 +166,8 @@ func CreateTable() {
 	createTableSQL := `CREATE TABLE IF NOT EXISTS devices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        type TEXT NOT NULL
+        type TEXT NOT NULL,
+        isOn BOOLEAN NOT NULL DEFAULT 0
     );`
 
 	_, err := db.Exec(createTableSQL)
