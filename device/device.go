@@ -137,8 +137,8 @@ func EditDevice(c *gin.Context) {
 		return
 	}
 
-	_, err = db.Exec("UPDATE devices SET name = ?, type = ?, isOn = ?, WHERE id = ?", updatedDevice.Name, updatedDevice.Type, updatedDevice.IsOn, id)
-	if err != nil { // Assuming 'err' holds the error from your update operation
+	_, err = db.Exec("UPDATE devices SET name = ?, type = ?, isOn = ? WHERE id = ?", updatedDevice.Name, updatedDevice.Type, updatedDevice.IsOn, id)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error updating resource.", "error": err.Error()})
 		return
 	}
