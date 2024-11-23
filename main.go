@@ -43,7 +43,7 @@ func main() {
 	r.PUT("/devices/:id", device.EditDevice)
 	r.DELETE("/devices/:id", device.DeleteDevice)
 
-	r.GET("/changeLog", changeLog.GetChangeLog)
+	r.GET("/change-log", changeLog.GetChangeLog)
 
 	r.Run()
 }
