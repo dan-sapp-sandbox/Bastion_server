@@ -159,11 +159,6 @@ func EditDevice(c *gin.Context) {
 		return
 	}
 
-	changeDescription := "Edited " + updatedDevice.Type + ": Updated name to '" + updatedDevice.Name + "'"
-	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
-		log.Printf("Failed to log change: %v", err)
-	}
-
 	devices, err := fetchDevices()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -172,6 +167,18 @@ func EditDevice(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+	var matchingDevice *Device
+	for _, device := range devices {
+		if device.ID == id {
+			matchingDevice = &device
+			break
+		}
+	}
+
+	changeDescription := "Edited " + matchingDevice.Name + ": Updated name to '" + updatedDevice.Name + "'"
+	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
+		log.Printf("Failed to log change: %v", err)
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -195,19 +202,6 @@ func DeleteDevice(c *gin.Context) {
 	}
 
 	devices, err := fetchDevices()
-	var matchingDevice *Device
-	for _, device := range devices {
-		if device.ID == id {
-			matchingDevice = &device
-			break
-		}
-	}
-	// Log the change
-	changeDescription := "Deleted " + matchingDevice.Type + matchingDevice.Name
-	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
-		log.Printf("Failed to log change: %v", err)
-	}
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -215,6 +209,19 @@ func DeleteDevice(c *gin.Context) {
 			"error":   err.Error(),
 		})
 		return
+	}
+	var matchingDevice *Device
+	for _, device := range devices {
+		if device.ID == id {
+			matchingDevice = &device
+			break
+		}
+	}
+
+	changeDescription := "Deleted " + matchingDevice.Type + " '" + matchingDevice.Name + "'"
+
+	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
+		log.Printf("Failed to log change: %v", err)
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
