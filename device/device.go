@@ -188,10 +188,12 @@ func seedData() {
 
 	if count == 0 {
 		insertSQL := `INSERT INTO devices (name, type, isOn) VALUES
-			('Living Room', 'Light', true),
-			('Bedroom', 'Fan', false),
-			('Front Door', 'Door', false),
-			('Kitchen', 'Light', true)`
+			('Living Room', 'light', true),
+			('Kitchen', 'light', false),
+			('Bathroom', 'light', true),
+			('Bedroom', 'fan', false),
+			('Front Door', 'lock', true),
+			('Back Door', 'lock', false)`
 
 		_, err := db.Exec(insertSQL)
 		if err != nil {
