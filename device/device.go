@@ -24,7 +24,6 @@ func Setup(database *sql.DB) {
 }
 
 func ListDevices(c *gin.Context) {
-	// Parse query parameters for pagination
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "100"))
 
@@ -33,11 +32,8 @@ func ListDevices(c *gin.Context) {
 	}
 
 	offset := (page - 1) * perPage
-
-	// Initialize devices as an empty slice
 	devices := []Device{}
 
-	// Query to fetch paginated items
 	query := "SELECT id, name, type, isOn FROM devices LIMIT ? OFFSET ?"
 	rows, err := db.Query(query, perPage, offset)
 	if err != nil {
@@ -63,7 +59,6 @@ func ListDevices(c *gin.Context) {
 		devices = append(devices, u)
 	}
 
-	// Construct the response
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Resources retrieved successfully.",
@@ -123,8 +118,7 @@ func AddDevice(c *gin.Context) {
 
 	newDevice.ID = int(id)
 
-	// Log the change
-	changeDescription := "Added device: " + newDevice.Name
+	changeDescription := "Added new " + newDevice.Type + ": " + newDevice.Name
 	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
@@ -165,8 +159,7 @@ func EditDevice(c *gin.Context) {
 		return
 	}
 
-	// Log the change
-	changeDescription := "Edited device ID " + strconv.Itoa(id) + ": Updated name to '" + updatedDevice.Name + "'"
+	changeDescription := "Edited " + updatedDevice.Type + ": Updated name to '" + updatedDevice.Name + "'"
 	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
@@ -201,13 +194,20 @@ func DeleteDevice(c *gin.Context) {
 		return
 	}
 
+	devices, err := fetchDevices()
+	var matchingDevice *Device
+	for _, device := range devices {
+		if device.ID == id {
+			matchingDevice = &device
+			break
+		}
+	}
 	// Log the change
-	changeDescription := "Deleted device with ID " + strconv.Itoa(id)
+	changeDescription := "Deleted " + matchingDevice.Type + matchingDevice.Name
 	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
 
-	devices, err := fetchDevices()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
