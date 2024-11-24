@@ -2,6 +2,7 @@ package device
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -191,42 +192,71 @@ func EditDevice(c *gin.Context) {
 func DeleteDevice(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid device ID.", "error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid device ID.",
+			"error":   err.Error(),
+		})
 		return
 	}
 
-	_, err = db.Exec("DELETE FROM devices WHERE id = ?", id)
+	var device Device
+	err = db.QueryRow("SELECT id, type, name FROM devices WHERE id = ?", id).Scan(&device.ID, &device.Type, &device.Name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error deleting resource.", "error": err.Error()})
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{
+				"success": false,
+				"message": "Device not found.",
+				"error":   "Device with given ID not found",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error fetching device.",
+			"error":   err.Error(),
+		})
 		return
+	}
+
+	result, err := db.Exec("DELETE FROM devices WHERE id = ?", id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error deleting device.",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil || rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "Device not found.",
+			"error":   "No device was deleted",
+		})
+		return
+	}
+
+	changeDescription := fmt.Sprintf("Deleted %s '%s'", device.Type, device.Name)
+	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
+		log.Printf("Failed to log change: %v", err)
 	}
 
 	devices, err := fetchDevices()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
-			"message": "Error retrieving resources.",
+			"message": "Error retrieving updated devices list.",
 			"error":   err.Error(),
 		})
 		return
 	}
-	var matchingDevice *Device
-	for _, device := range devices {
-		if device.ID == id {
-			matchingDevice = &device
-			break
-		}
-	}
 
-	changeDescription := "Deleted " + matchingDevice.Type + " '" + matchingDevice.Name + "'"
-
-	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
-		log.Printf("Failed to log change: %v", err)
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": "Resource deleted successfully.",
+		"message": "Device deleted successfully.",
 		"data":    devices,
 	})
 }
