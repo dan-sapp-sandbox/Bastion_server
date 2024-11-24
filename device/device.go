@@ -254,10 +254,17 @@ func DeleteDevice(c *gin.Context) {
 		return
 	}
 
+	filteredDevices := []Device{}
+	for _, dev := range devices {
+		if dev.ID != id {
+			filteredDevices = append(filteredDevices, dev)
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Device deleted successfully.",
-		"data":    devices,
+		"data":    filteredDevices,
 	})
 }
 
