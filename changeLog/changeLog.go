@@ -66,7 +66,7 @@ func GetChangeLog(c *gin.Context) {
 }
 
 func AddEntryToLog(change string) error {
-	_, err := db.Exec("INSERT INTO change_log (change, timestamp) VALUES (?, datetime('now'))", change)
+	_, err := db.Exec("INSERT INTO change_log (change, timestamp) VALUES (?, strftime('%s', 'now') || '000')", change)
 	if err != nil {
 		log.Printf("Failed to add log entry: %v", err)
 		return err
