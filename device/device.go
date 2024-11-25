@@ -2,13 +2,16 @@ package device
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/dan-sapp-sandbox/Bastion_server/changeLog"
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 type Device struct {
@@ -18,56 +21,68 @@ type Device struct {
 	IsOn bool   `json:"isOn"`
 }
 
-var db *sql.DB
+var (
+	db               *sql.DB
+	upgrader         = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+	clients          = make(map[*websocket.Conn]bool)
+	clientsMutex     sync.Mutex
+	broadcastChannel = make(chan []byte)
+)
 
+// Setup initializes the package with a database connection
 func Setup(database *sql.DB) {
 	db = database
+	go handleBroadcasts()
 }
 
-func ListDevices(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "100"))
-
-	if page < 1 {
-		page = 1
-	}
-
-	offset := (page - 1) * perPage
-	devices := []Device{}
-
-	query := "SELECT id, name, type, isOn FROM devices LIMIT ? OFFSET ?"
-	rows, err := db.Query(query, perPage, offset)
+// WebSocketHandler handles WebSocket connections for real-time updates
+func WebSocketHandler(c *gin.Context) {
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error retrieving resources.",
-			"error":   err.Error(),
-		})
+		log.Println("WebSocket upgrade failed:", err)
 		return
 	}
-	defer rows.Close()
+	defer conn.Close()
 
-	for rows.Next() {
-		var u Device
-		if err := rows.Scan(&u.ID, &u.Name, &u.Type, &u.IsOn); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Error retrieving resources.",
-				"error":   err.Error(),
-			})
-			return
-		}
-		devices = append(devices, u)
+	clientsMutex.Lock()
+	clients[conn] = true
+	clientsMutex.Unlock()
+
+	log.Println("Client connected via WebSocket")
+
+	// Fetch and send the current list of devices to the connected client
+	devices, err := fetchAllDevices()
+	if err != nil {
+		log.Println("Error fetching devices for WebSocket:", err)
+		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Resources retrieved successfully.",
-		"data":    devices,
-	})
+	initialMessage := map[string]interface{}{
+		"action":  "init",
+		"devices": devices,
+	}
+
+	if err := conn.WriteJSON(initialMessage); err != nil {
+		log.Println("Error sending initial devices to WebSocket client:", err)
+	}
+
+	// Keep the connection alive to handle broadcasts or client disconnection
+	for {
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			log.Println("WebSocket client disconnected:", err)
+			clientsMutex.Lock()
+			delete(clients, conn)
+			clientsMutex.Unlock()
+			break
+		}
+	}
 }
 
-func fetchDevices() ([]Device, error) {
+// fetchAllDevices retrieves all devices from the database
+func fetchAllDevices() ([]Device, error) {
+	devices := []Device{}
+
 	query := "SELECT id, name, type, isOn FROM devices"
 	rows, err := db.Query(query)
 	if err != nil {
@@ -75,7 +90,6 @@ func fetchDevices() ([]Device, error) {
 	}
 	defer rows.Close()
 
-	var devices []Device
 	for rows.Next() {
 		var device Device
 		if err := rows.Scan(&device.ID, &device.Name, &device.Type, &device.IsOn); err != nil {
@@ -83,9 +97,11 @@ func fetchDevices() ([]Device, error) {
 		}
 		devices = append(devices, device)
 	}
+
 	return devices, nil
 }
 
+// AddDevice handles POST /devices to add a new device
 func AddDevice(c *gin.Context) {
 	var newDevice Device
 	if err := c.BindJSON(&newDevice); err != nil {
@@ -118,26 +134,17 @@ func AddDevice(c *gin.Context) {
 	}
 
 	newDevice.ID = int(id)
+	sendDeviceUpdate("add")
 
 	changeDescription := "Added new " + newDevice.Type + ": " + newDevice.Name
 	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
 
-	devices, err := fetchDevices()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error retrieving resources.",
-			"error":   err.Error(),
-		})
-		return
-	}
-
 	c.JSON(http.StatusCreated, gin.H{
 		"success": true,
 		"message": "Resource created successfully.",
-		"data":    devices,
+		"data":    newDevice,
 	})
 }
 
@@ -160,35 +167,27 @@ func EditDevice(c *gin.Context) {
 		return
 	}
 
-	devices, err := fetchDevices()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error retrieving resources.",
-			"error":   err.Error(),
-		})
-		return
-	}
-	var matchingDevice *Device
-	for _, device := range devices {
-		if device.ID == id {
-			matchingDevice = &device
-			break
-		}
-	}
+	updatedDevice.ID = id
+	sendDeviceUpdate("update")
 
-	changeDescription := "Edited " + matchingDevice.Name + ": Updated name to '" + updatedDevice.Name + "'"
+	changeDescription := "Edited device with ID " + strconv.Itoa(id)
 	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Resource updated successfully.",
-		"data":    devices,
 	})
+
+	// c.JSON(http.StatusOK, gin.H{
+	// 	"success": true,
+	// 	"message": "Log entries retrieved successfully.",
+	// 	"data":    entries,
+	// })
 }
 
+// DeleteDevice handles DELETE /devices/:id to remove a device
 func DeleteDevice(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -201,71 +200,73 @@ func DeleteDevice(c *gin.Context) {
 	}
 
 	var device Device
-	err = db.QueryRow("SELECT id, type, name FROM devices WHERE id = ?", id).Scan(&device.ID, &device.Type, &device.Name)
+	err = db.QueryRow("SELECT id, name, type FROM devices WHERE id = ?", id).Scan(&device.ID, &device.Name, &device.Type)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			c.JSON(http.StatusNotFound, gin.H{
-				"success": false,
-				"message": "Device not found.",
-				"error":   "Device with given ID not found",
-			})
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Device not found."})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error fetching device.",
-			"error":   err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error fetching device."})
 		return
 	}
 
-	result, err := db.Exec("DELETE FROM devices WHERE id = ?", id)
+	_, err = db.Exec("DELETE FROM devices WHERE id = ?", id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error deleting device.",
-			"error":   err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error deleting device."})
 		return
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil || rowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "Device not found.",
-			"error":   "No device was deleted",
-		})
-		return
-	}
+	sendDeviceUpdate("delete")
 
-	changeDescription := fmt.Sprintf("Deleted %s '%s'", device.Type, device.Name)
+	changeDescription := fmt.Sprintf("Deleted device %s '%s'", device.Type, device.Name)
 	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
 
-	devices, err := fetchDevices()
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Device deleted successfully."})
+}
+
+// Broadcast updated device information and the full device list to WebSocket clients
+func sendDeviceUpdate(action string) {
+	// Fetch the full list of devices
+	devices, err := fetchAllDevices()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error retrieving updated devices list.",
-			"error":   err.Error(),
-		})
+		log.Println("Error fetching full device list:", err)
 		return
 	}
 
-	filteredDevices := []Device{}
-	for _, dev := range devices {
-		if dev.ID != id {
-			filteredDevices = append(filteredDevices, dev)
-		}
+	// Prepare the update payload
+	update := map[string]interface{}{
+		"action":  action,
+		"devices": devices, // Send the full device list
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Device deleted successfully.",
-		"data":    filteredDevices,
-	})
+	// Marshal the payload into JSON
+	data, err := json.Marshal(update)
+	if err != nil {
+		log.Println("Error marshaling device update:", err)
+		return
+	}
+
+	// Send the update through the broadcast channel
+	broadcastChannel <- data
+}
+
+// handleBroadcasts sends updates to all connected WebSocket clients
+func handleBroadcasts() {
+	for {
+		message := <-broadcastChannel
+		clientsMutex.Lock()
+		for client := range clients {
+			err := client.WriteMessage(websocket.TextMessage, message)
+			if err != nil {
+				log.Println("WebSocket error:", err)
+				client.Close()
+				delete(clients, client)
+			}
+		}
+		clientsMutex.Unlock()
+	}
 }
 
 // CreateTable creates the devices table if it does not exist
