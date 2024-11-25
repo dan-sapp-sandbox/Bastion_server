@@ -29,13 +29,11 @@ var (
 	broadcastChannel = make(chan []byte)
 )
 
-// Setup initializes the package with a database connection
 func Setup(database *sql.DB) {
 	db = database
 	go handleBroadcasts()
 }
 
-// WebSocketHandler handles WebSocket connections for real-time updates
 func WebSocketHandler(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -50,7 +48,6 @@ func WebSocketHandler(c *gin.Context) {
 
 	log.Println("Client connected via WebSocket")
 
-	// Fetch and send the current list of devices to the connected client
 	devices, err := fetchAllDevices()
 	if err != nil {
 		log.Println("Error fetching devices for WebSocket:", err)
@@ -66,7 +63,6 @@ func WebSocketHandler(c *gin.Context) {
 		log.Println("Error sending initial devices to WebSocket client:", err)
 	}
 
-	// Keep the connection alive to handle broadcasts or client disconnection
 	for {
 		_, _, err := conn.ReadMessage()
 		if err != nil {
@@ -79,7 +75,6 @@ func WebSocketHandler(c *gin.Context) {
 	}
 }
 
-// fetchAllDevices retrieves all devices from the database
 func fetchAllDevices() ([]Device, error) {
 	devices := []Device{}
 
@@ -101,7 +96,6 @@ func fetchAllDevices() ([]Device, error) {
 	return devices, nil
 }
 
-// AddDevice handles POST /devices to add a new device
 func AddDevice(c *gin.Context) {
 	var newDevice Device
 	if err := c.BindJSON(&newDevice); err != nil {
@@ -179,15 +173,8 @@ func EditDevice(c *gin.Context) {
 		"success": true,
 		"message": "Resource updated successfully.",
 	})
-
-	// c.JSON(http.StatusOK, gin.H{
-	// 	"success": true,
-	// 	"message": "Log entries retrieved successfully.",
-	// 	"data":    entries,
-	// })
 }
 
-// DeleteDevice handles DELETE /devices/:id to remove a device
 func DeleteDevice(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
