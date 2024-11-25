@@ -5,8 +5,10 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 type LogEntry struct {
@@ -16,9 +18,18 @@ type LogEntry struct {
 }
 
 var db *sql.DB
+var clients = make(map[*websocket.Conn]bool)
+var broadcast = make(chan LogEntry)
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
 
 func Setup(database *sql.DB) {
 	db = database
+	go handleBroadcast()
 }
 
 func GetChangeLog(c *gin.Context) {
@@ -66,11 +77,19 @@ func GetChangeLog(c *gin.Context) {
 }
 
 func AddEntryToLog(change string) error {
-	_, err := db.Exec("INSERT INTO change_log (change, timestamp) VALUES (?, strftime('%s', 'now') || '000')", change)
+	timestamp := strconv.FormatInt(time.Now().Unix()*1000, 10)
+	_, err := db.Exec("INSERT INTO change_log (change, timestamp) VALUES (?, ?)", change, timestamp)
 	if err != nil {
 		log.Printf("Failed to add log entry: %v", err)
 		return err
 	}
+
+	entry := LogEntry{
+		Change:    change,
+		Timestamp: timestamp,
+	}
+	broadcast <- entry
+
 	return nil
 }
 
@@ -84,5 +103,69 @@ func CreateTable() {
 	_, err := db.Exec(createTableSQL)
 	if err != nil {
 		log.Fatal("Failed to create change_log table: ", err)
+	}
+}
+
+func ChangeLogWebSocket(c *gin.Context) {
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade failed: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	clients[conn] = true
+
+	sendCurrentChangeLogs(conn)
+
+	for {
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			log.Printf("WebSocket connection closed: %v", err)
+			delete(clients, conn)
+			break
+		}
+	}
+}
+
+func sendCurrentChangeLogs(conn *websocket.Conn) {
+	entries := []LogEntry{}
+	query := "SELECT id, change, timestamp FROM change_log ORDER BY timestamp DESC"
+	rows, err := db.Query(query)
+	if err != nil {
+		log.Printf("Error retrieving change logs: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var entry LogEntry
+		if err := rows.Scan(&entry.ID, &entry.Change, &entry.Timestamp); err != nil {
+			log.Printf("Error scanning log entry: %v", err)
+			return
+		}
+		entries = append(entries, entry)
+	}
+
+	log.Printf("Sending change logs to WebSocket client: %+v", entries)
+
+	err = conn.WriteJSON(entries)
+	if err != nil {
+		log.Printf("Failed to send current logs to WebSocket client: %v", err)
+	}
+}
+
+func handleBroadcast() {
+	for {
+		entry := <-broadcast
+
+		for client := range clients {
+			err := client.WriteJSON(entry)
+			if err != nil {
+				log.Printf("Failed to send message to WebSocket client: %v", err)
+				client.Close()
+				delete(clients, client)
+			}
+		}
 	}
 }
