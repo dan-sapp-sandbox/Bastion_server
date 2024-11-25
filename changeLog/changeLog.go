@@ -32,50 +32,6 @@ func Setup(database *sql.DB) {
 	go handleBroadcast()
 }
 
-func GetChangeLog(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	perPage, _ := strconv.Atoi(c.DefaultQuery("perPage", "100"))
-
-	if page < 1 {
-		page = 1
-	}
-
-	offset := (page - 1) * perPage
-
-	entries := []LogEntry{}
-
-	query := "SELECT id, change, timestamp FROM change_log ORDER BY timestamp DESC LIMIT ? OFFSET ?"
-	rows, err := db.Query(query, perPage, offset)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"message": "Error retrieving log entries.",
-			"error":   err.Error(),
-		})
-		return
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var entry LogEntry
-		if err := rows.Scan(&entry.ID, &entry.Change, &entry.Timestamp); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"success": false,
-				"message": "Error retrieving log entries.",
-				"error":   err.Error(),
-			})
-			return
-		}
-		entries = append(entries, entry)
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Log entries retrieved successfully.",
-		"data":    entries,
-	})
-}
-
 func AddEntryToLog(change string) error {
 	timestamp := strconv.FormatInt(time.Now().Unix()*1000, 10)
 	_, err := db.Exec("INSERT INTO change_log (change, timestamp) VALUES (?, ?)", change, timestamp)
@@ -147,8 +103,6 @@ func sendCurrentChangeLogs(conn *websocket.Conn) {
 		entries = append(entries, entry)
 	}
 
-	log.Printf("Sending change logs to WebSocket client: %+v", entries)
-
 	err = conn.WriteJSON(entries)
 	if err != nil {
 		log.Printf("Failed to send current logs to WebSocket client: %v", err)
@@ -157,12 +111,35 @@ func sendCurrentChangeLogs(conn *websocket.Conn) {
 
 func handleBroadcast() {
 	for {
-		entry := <-broadcast
+		<-broadcast
+
+		entries := []LogEntry{}
+		query := "SELECT id, change, timestamp FROM change_log ORDER BY timestamp DESC"
+		rows, err := db.Query(query)
+		if err != nil {
+			log.Printf("Error retrieving change logs: %v", err)
+			continue
+		}
+		// defer rows.Close()
+
+		for rows.Next() {
+			var logEntry LogEntry
+			if err := rows.Scan(&logEntry.ID, &logEntry.Change, &logEntry.Timestamp); err != nil {
+				log.Printf("Error scanning log entry: %v", err)
+				continue
+			}
+			entries = append(entries, logEntry)
+		}
+
+		if err := rows.Err(); err != nil {
+			log.Printf("Error with rows iteration: %v", err)
+			continue
+		}
 
 		for client := range clients {
-			err := client.WriteJSON(entry)
+			err := client.WriteJSON(entries)
 			if err != nil {
-				log.Printf("Failed to send message to WebSocket client: %v", err)
+				log.Printf("Failed to send full logs to WebSocket client: %v", err)
 				client.Close()
 				delete(clients, client)
 			}
