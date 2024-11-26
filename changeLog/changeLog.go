@@ -35,7 +35,7 @@ func Setup(database *sql.DB) {
 
 func AddEntryToLog(change string, changeType string) error {
 	timestamp := strconv.FormatInt(time.Now().Unix()*1000, 10)
-	_, err := db.Exec("INSERT INTO change_log (change, timestamp, changeType) VALUES (?, ?)", change, timestamp, changeType)
+	_, err := db.Exec("INSERT INTO change_log (change, timestamp, changeType) VALUES (?, ?, ?)", change, timestamp, changeType)
 	if err != nil {
 		log.Printf("Failed to add log entry: %v", err)
 		return err
@@ -123,11 +123,12 @@ func handleBroadcast() {
 			log.Printf("Error retrieving change logs: %v", err)
 			continue
 		}
-		// defer rows.Close()
+
+		defer rows.Close()
 
 		for rows.Next() {
 			var logEntry LogEntry
-			if err := rows.Scan(&logEntry.ID, &logEntry.Change, &logEntry.Timestamp); err != nil {
+			if err := rows.Scan(&logEntry.ID, &logEntry.Change, &logEntry.ChangeType, &logEntry.Timestamp); err != nil {
 				log.Printf("Error scanning log entry: %v", err)
 				continue
 			}
