@@ -12,9 +12,10 @@ import (
 )
 
 type LogEntry struct {
-	ID        int    `json:"id"`
-	Change    string `json:"change"`
-	Timestamp string `json:"timestamp"`
+	ID         int    `json:"id"`
+	Change     string `json:"change"`
+	Timestamp  string `json:"timestamp"`
+	ChangeType string `json:"changeType"`
 }
 
 var db *sql.DB
@@ -32,17 +33,18 @@ func Setup(database *sql.DB) {
 	go handleBroadcast()
 }
 
-func AddEntryToLog(change string) error {
+func AddEntryToLog(change string, changeType string) error {
 	timestamp := strconv.FormatInt(time.Now().Unix()*1000, 10)
-	_, err := db.Exec("INSERT INTO change_log (change, timestamp) VALUES (?, ?)", change, timestamp)
+	_, err := db.Exec("INSERT INTO change_log (change, timestamp, changeType) VALUES (?, ?)", change, timestamp, changeType)
 	if err != nil {
 		log.Printf("Failed to add log entry: %v", err)
 		return err
 	}
 
 	entry := LogEntry{
-		Change:    change,
-		Timestamp: timestamp,
+		Change:     change,
+		Timestamp:  timestamp,
+		ChangeType: changeType,
 	}
 	broadcast <- entry
 

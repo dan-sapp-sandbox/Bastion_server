@@ -131,7 +131,7 @@ func AddDevice(c *gin.Context) {
 	sendDeviceUpdate("add")
 
 	changeDescription := "Added new " + newDevice.Type + ": " + newDevice.Name
-	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
+	if err := changeLog.AddEntryToLog(changeDescription, "add"); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
 
@@ -165,7 +165,7 @@ func EditDevice(c *gin.Context) {
 	sendDeviceUpdate("update")
 
 	changeDescription := "Edited device with ID " + strconv.Itoa(id)
-	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
+	if err := changeLog.AddEntryToLog(changeDescription, "edit"); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
 
@@ -206,40 +206,34 @@ func DeleteDevice(c *gin.Context) {
 	sendDeviceUpdate("delete")
 
 	changeDescription := fmt.Sprintf("Deleted device %s '%s'", device.Type, device.Name)
-	if err := changeLog.AddEntryToLog(changeDescription); err != nil {
+	if err := changeLog.AddEntryToLog(changeDescription, "delete"); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Device deleted successfully."})
 }
 
-// Broadcast updated device information and the full device list to WebSocket clients
 func sendDeviceUpdate(action string) {
-	// Fetch the full list of devices
 	devices, err := fetchAllDevices()
 	if err != nil {
 		log.Println("Error fetching full device list:", err)
 		return
 	}
 
-	// Prepare the update payload
 	update := map[string]interface{}{
 		"action":  action,
-		"devices": devices, // Send the full device list
+		"devices": devices,
 	}
 
-	// Marshal the payload into JSON
 	data, err := json.Marshal(update)
 	if err != nil {
 		log.Println("Error marshaling device update:", err)
 		return
 	}
 
-	// Send the update through the broadcast channel
 	broadcastChannel <- data
 }
 
-// handleBroadcasts sends updates to all connected WebSocket clients
 func handleBroadcasts() {
 	for {
 		message := <-broadcastChannel
