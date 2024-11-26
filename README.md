@@ -10,7 +10,7 @@
 
 ### Devices
 
-- Get list of Devices: Websocket /devices/ws
+- Get list of devices: Websocket /devices/ws
 - Create a device: POST /add-device
 - Update a device: PUT /edit-device/:id
 - Delete a device: DELETE /delete-device/:id
