@@ -55,6 +55,7 @@ func CreateTable() {
 	createTableSQL := `CREATE TABLE IF NOT EXISTS change_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         change TEXT NOT NULL,
+        changeType TEXT NOT NULL,
         timestamp TEXT NOT NULL
     );`
 
@@ -88,7 +89,7 @@ func ChangeLogWebSocket(c *gin.Context) {
 
 func sendCurrentChangeLogs(conn *websocket.Conn) {
 	entries := []LogEntry{}
-	query := "SELECT id, change, timestamp FROM change_log ORDER BY timestamp DESC"
+	query := "SELECT id, change, changeType, timestamp FROM change_log ORDER BY timestamp DESC"
 	rows, err := db.Query(query)
 	if err != nil {
 		log.Printf("Error retrieving change logs: %v", err)
@@ -98,7 +99,7 @@ func sendCurrentChangeLogs(conn *websocket.Conn) {
 
 	for rows.Next() {
 		var entry LogEntry
-		if err := rows.Scan(&entry.ID, &entry.Change, &entry.Timestamp); err != nil {
+		if err := rows.Scan(&entry.ID, &entry.Change, &entry.ChangeType, &entry.Timestamp); err != nil {
 			log.Printf("Error scanning log entry: %v", err)
 			return
 		}
@@ -116,7 +117,7 @@ func handleBroadcast() {
 		<-broadcast
 
 		entries := []LogEntry{}
-		query := "SELECT id, change, timestamp FROM change_log ORDER BY timestamp DESC"
+		query := "SELECT id, change, changeType, timestamp FROM change_log ORDER BY timestamp DESC"
 		rows, err := db.Query(query)
 		if err != nil {
 			log.Printf("Error retrieving change logs: %v", err)
