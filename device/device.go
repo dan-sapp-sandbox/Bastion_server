@@ -156,7 +156,7 @@ func EditDevice(c *gin.Context) {
 		return
 	}
 
-	_, err = db.Exec("UPDATE devices SET name = ?, room = ?, type = ?, isOn = ?, WHERE id = ?", updatedDevice.Name, updatedDevice.Room, updatedDevice.Type, updatedDevice.IsOn, id)
+	_, err = db.Exec("UPDATE devices SET name = ?, room = ?, type = ?, isOn = ? WHERE id = ?", updatedDevice.Name, updatedDevice.Room, updatedDevice.Type, updatedDevice.IsOn, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error updating resource.", "error": err.Error()})
 		return
@@ -258,7 +258,7 @@ func CreateTable() {
         name TEXT NOT NULL,
         type TEXT NOT NULL,
         isOn BOOLEAN NOT NULL DEFAULT 0,
-        room TEXT NOT NULL,
+        room TEXT NOT NULL
     );`
 
 	_, err := db.Exec(createTableSQL)
