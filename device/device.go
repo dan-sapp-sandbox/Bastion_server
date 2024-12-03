@@ -19,6 +19,7 @@ type Device struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
 	IsOn bool   `json:"isOn"`
+	Room string `json:"room"`
 }
 
 var (
@@ -78,7 +79,7 @@ func WebSocketHandler(c *gin.Context) {
 func fetchAllDevices() ([]Device, error) {
 	devices := []Device{}
 
-	query := "SELECT id, name, type, isOn FROM devices"
+	query := "SELECT id, name, room, type, isOn FROM devices"
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, err
@@ -87,7 +88,7 @@ func fetchAllDevices() ([]Device, error) {
 
 	for rows.Next() {
 		var device Device
-		if err := rows.Scan(&device.ID, &device.Name, &device.Type, &device.IsOn); err != nil {
+		if err := rows.Scan(&device.ID, &device.Name, &device.Room, &device.Type, &device.IsOn); err != nil {
 			return nil, err
 		}
 		devices = append(devices, device)
@@ -107,7 +108,7 @@ func AddDevice(c *gin.Context) {
 		return
 	}
 
-	result, err := db.Exec("INSERT INTO devices (name, type, isOn) VALUES (?, ?, ?)", newDevice.Name, newDevice.Type, newDevice.IsOn)
+	result, err := db.Exec("INSERT INTO devices (name, room, type, isOn) VALUES (?, ?, ?)", newDevice.Name, newDevice.Room, newDevice.Type, newDevice.IsOn)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -155,7 +156,7 @@ func EditDevice(c *gin.Context) {
 		return
 	}
 
-	_, err = db.Exec("UPDATE devices SET name = ?, type = ?, isOn = ? WHERE id = ?", updatedDevice.Name, updatedDevice.Type, updatedDevice.IsOn, id)
+	_, err = db.Exec("UPDATE devices SET name = ?, room = ?, type = ?, isOn = ?, WHERE id = ?", updatedDevice.Name, updatedDevice.Room, updatedDevice.Type, updatedDevice.IsOn, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error updating resource.", "error": err.Error()})
 		return
@@ -256,7 +257,8 @@ func CreateTable() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         type TEXT NOT NULL,
-        isOn BOOLEAN NOT NULL DEFAULT 0
+        isOn BOOLEAN NOT NULL DEFAULT 0,
+        room TEXT NOT NULL,
     );`
 
 	_, err := db.Exec(createTableSQL)
@@ -275,13 +277,17 @@ func seedData() {
 	}
 
 	if count == 0 {
-		insertSQL := `INSERT INTO devices (name, type, isOn) VALUES
-			('Living Room', 'light', true),
-			('Kitchen', 'light', false),
-			('Bathroom', 'light', true),
-			('Bedroom', 'fan', false),
-			('Front Door', 'lock', true),
-			('Back Door', 'lock', false)`
+		insertSQL := `INSERT INTO devices (name, room, type, isOn) VALUES
+			('Main', 'Living Room', 'light', false),
+			('Side', 'Living Room', 'light', true),
+			('Front Door', 'Living', 'lock', true),
+			('Kitchen Table', 'Kitchen', 'light', false),
+			('Stove', 'Kitchen', 'light', true),
+			('Main', 'Kitchen', 'speaker', true),
+			('Vanity', 'Bathroom', 'light', false),
+			('Main', 'Bedroom', 'light', true),
+			('Main', 'Bedroom', 'fan', true),
+			('Back Door', 'Other', 'lock', true)`
 
 		_, err := db.Exec(insertSQL)
 		if err != nil {
