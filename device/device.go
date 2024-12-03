@@ -183,7 +183,7 @@ func EditDevice(c *gin.Context) {
 	updatedDevice.ID = id
 	sendDeviceUpdate("update")
 
-	changeDescription := "Edited device: " + updatedDevice.Name
+	changeDescription := "Edited " + updatedDevice.Type + ":  " + updatedDevice.Room + " " + updatedDevice.Name
 	if err := changeLog.AddEntryToLog(changeDescription, "edit"); err != nil {
 		log.Printf("Failed to log change: %v", err)
 	}
