@@ -299,13 +299,13 @@ func seedData() {
 			('Main', 'Living Room', 'light', false),
 			('Side', 'Living Room', 'light', true),
 			('Front Door', 'Living', 'lock', true),
-			('Kitchen Table', 'Kitchen', 'light', false),
+			('Table', 'Kitchen', 'light', false),
 			('Stove', 'Kitchen', 'light', true),
 			('Main', 'Kitchen', 'speaker', true),
 			('Vanity', 'Bathroom', 'light', false),
 			('Main', 'Bedroom', 'light', true),
 			('Main', 'Bedroom', 'fan', true),
-			('Back Door', 'Other', 'lock', true)`
+			('Back Door', 'Backyard', 'lock', true)`
 
 		_, err := db.Exec(insertSQL)
 		if err != nil {
