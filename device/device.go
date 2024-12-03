@@ -108,7 +108,7 @@ func AddDevice(c *gin.Context) {
 		return
 	}
 
-	result, err := db.Exec("INSERT INTO devices (name, room, type, isOn) VALUES (?, ?, ?)", newDevice.Name, newDevice.Room, newDevice.Type, newDevice.IsOn)
+	result, err := db.Exec("INSERT INTO devices (name, room, type, isOn) VALUES (?, ?, ?, ?)", newDevice.Name, newDevice.Room, newDevice.Type, newDevice.IsOn)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"success": false,
@@ -146,19 +146,37 @@ func AddDevice(c *gin.Context) {
 func EditDevice(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Invalid device ID.", "error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid device ID.",
+			"error":   err.Error(),
+		})
 		return
 	}
 
 	var updatedDevice Device
 	if err := c.BindJSON(&updatedDevice); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "Error updating resource.", "error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Error updating resource.",
+			"error":   err.Error(),
+		})
 		return
 	}
 
-	_, err = db.Exec("UPDATE devices SET name = ?, room = ?, type = ?, isOn = ? WHERE id = ?", updatedDevice.Name, updatedDevice.Room, updatedDevice.Type, updatedDevice.IsOn, id)
+	_, err = db.Exec("UPDATE devices SET name = ?, room = ?, type = ?, isOn = ? WHERE id = ?",
+		updatedDevice.Name,
+		updatedDevice.Room,
+		updatedDevice.Type,
+		updatedDevice.IsOn,
+		id,
+	)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "Error updating resource.", "error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Error updating resource.",
+			"error":   err.Error(),
+		})
 		return
 	}
 
